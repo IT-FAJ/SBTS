@@ -1,46 +1,66 @@
+const dns = require('node:dns');
+dns.setServers(['1.1.1.1', '8.8.8.8']);
+
 require('dotenv').config();
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const connectDB = require('./config/db');
+
+// استدعاء جميع الموديلات لضمان التنظيف الشامل
+const School = require('./models/School');
 const User = require('./models/User');
+const Student = require('./models/Student');
+const Bus = require('./models/Bus'); // تمت إضافة الباصات
 
 const seed = async () => {
-  await connectDB();
+  try {
+    await connectDB();
+    console.log('🧹 جاري تصفية قاعدة البيانات بالكامل...');
 
-  await User.deleteMany({});
+    // مسح جميع البيانات بشكل متوازٍ لتسريع العملية
+    const [delSchools, delUsers, delStudents, delBuses] = await Promise.all([
+      School.deleteMany({}),
+      User.deleteMany({}),
+      Student.deleteMany({}),
+      Bus.deleteMany({}) // مسح الباصات
+    ]);
 
-  const hash = await bcrypt.hash('Admin@123', 10);
-  const hashDriver = await bcrypt.hash('Driver@123', 10);
+    console.log('🗑️ تفاصيل الحذف:');
+    console.log(`   - المدارس: ${delSchools.deletedCount}`);
+    console.log(`   - المستخدمين: ${delUsers.deletedCount}`);
+    console.log(`   - الطلاب: ${delStudents.deletedCount}`);
+    console.log(`   - الباصات: ${delBuses.deletedCount}`);
 
-  await User.create([
-    {
-      username: 'admin01',
-      email: 'admin@sbts.com',
-      password: hash,
-      name: 'Main Admin',
-      role: 'admin',
-      isActive: true
-    },
-    {
-      username: 'driver01',
-      email: 'driver@sbts.com',
-      password: hashDriver,
-      name: 'Active Driver',
-      role: 'driver',
-      isActive: true
-    },
-    {
-      username: 'driver02',
-      email: 'driver2@sbts.com',
-      password: hashDriver,
-      name: 'Suspended Driver',
-      role: 'driver',
-      isActive: false
-    }
-  ]);
+    // ─── 1. Hash passwords ───────────────────────────────────────────────
+    const hashSuper = await bcrypt.hash('Super@123', 10);
 
-  console.log('✅ Seed completed');
-  mongoose.connection.close();
+    // ─── 2. Create users ─────────────────────────────────────────────────
+    await User.create([
+      // Super Admin — no school association
+      {
+        username: 'superadmin01',
+        email: 'super@sbts.com',
+        password: hashSuper,
+        name: 'System Super Admin',
+        role: 'superadmin',
+        school: null,
+        isActive: true
+      }
+    ]);
+
+    console.log('\n✅ Seed completed — Super Admin created successfully!');
+    console.log('──────────────────────────────────────────────────');
+    console.log('   📋 Demo Account:');
+    console.log('   🧑‍💻 Super Admin : superadmin01');
+    console.log('   🔑 Password    : Super@123');
+    console.log('──────────────────────────────────────────────────\n');
+
+    mongoose.connection.close();
+  } catch (err) {
+    console.error('❌ حدث خطأ أثناء تصفية القاعدة:', err.message);
+    mongoose.connection.close();
+    process.exit(1);
+  }
 };
 
 seed();
